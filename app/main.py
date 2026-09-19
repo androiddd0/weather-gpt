@@ -12,6 +12,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from . import alerts
 from .agent import run_llm_agent
 from .config import settings
@@ -33,6 +35,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="WeatherGPT", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ------------------------------- models -------------------------------
@@ -115,6 +125,61 @@ async def push_test_alert(client_id: str = Query("anonymous")):
     return {"created": 1, "alert": ev}
 
 
+# ------------------------------- weather summary (for charts) -------------------------------
+@app.get("/api/weather/summary")
+def weather_summary(location: str = Query(..., min_length=2), days: int = Query(7, ge=1, le=16)):
+    """Structured weather data optimised for charting: temp/rain arrays by day."""
+    from . import weather as w
+    try:
+        fc = w.forecast(location, days=days)
+        cur = w.current_weather(location)
+    except WeatherError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {
+        "place": fc["place"],
+        "current": {
+            "temperature_c": cur["temperature_c"],
+            "feels_like_c": cur["feels_like_c"],
+            "humidity_percent": cur["humidity_percent"],
+            "wind_kmh": cur["wind_kmh"],
+            "wind_gusts_kmh": cur.get("wind_gusts_kmh"),
+            "condition": cur["condition"],
+            "emoji": cur["emoji"],
+            "cloud_cover_percent": cur.get("cloud_cover_percent"),
+            "pressure_hpa": cur.get("pressure_hpa"),
+            "precipitation_mm": cur.get("precipitation_mm"),
+            "is_day": cur.get("is_day", True),
+            "sunrise": cur.get("sunrise"),
+            "sunset": cur.get("sunset"),
+            "today_high_c": cur.get("today_high_c"),
+            "today_low_c": cur.get("today_low_c"),
+        },
+        "daily": [
+            {
+                "date": d["date"],
+                "high_c": d["high_c"],
+                "low_c": d["low_c"],
+                "rain_mm": d["rain_mm"],
+                "rain_prob_percent": d["rain_prob_percent"],
+                "wind_kmh": d["wind_kmh"],
+                "wind_gust_kmh": d.get("wind_gust_kmh"),
+                "uv_index": d["uv_index"],
+                "condition": d["condition"],
+                "emoji": d["emoji"],
+            }
+            for d in fc["days"]
+        ],
+    }
+
+
+# ------------------------------- alerts history -------------------------------
+@app.get("/api/alerts/history")
+def alerts_history(client_id: str = Query(""), limit: int = Query(50, ge=1, le=200)):
+    """Alert history with timestamps for the UI alerts panel."""
+    alerts_list = store.list_alerts(client_id or None, limit=limit)
+    return {"alerts": alerts_list, "count": len(alerts_list)}
+
+
 # ------------------------------- meta -------------------------------
 @app.get("/api/languages")
 def languages():
@@ -146,12 +211,30 @@ async def ws_endpoint(ws: WebSocket, client_id: str = "anonymous"):
 
 # ------------------------------- static frontend -------------------------------
 FRONTEND = Path(settings.FRONTEND_DIR)
-app.mount("/assets", StaticFiles(directory=FRONTEND / "assets"), name="assets")
+DIST = FRONTEND / "dist"
 
+if DIST.exists():
+    # Production: serve built Vite output
+    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
-@app.get("/")
-def index():
-    return FileResponse(FRONTEND / "index.html")
+    @app.get("/{full_path:path}")
+    def spa_fallback(full_path: str):
+        file = DIST / full_path
+        if file.is_file():
+            return FileResponse(file)
+        return FileResponse(DIST / "index.html")
+else:
+    # Development: serve raw frontend/ or show placeholder
+    if FRONTEND.exists():
+        app.mount("/assets", StaticFiles(directory=FRONTEND / "assets"), name="assets")
+
+        @app.get("/")
+        def index():
+            return FileResponse(FRONTEND / "index.html")
+    else:
+        @app.get("/")
+        def index():
+            return {"message": "WeatherGPT API is running. Frontend not built yet. Run 'npm run dev' in frontend/ or 'npm run build' to create dist/."}
 
 
 if __name__ == "__main__":

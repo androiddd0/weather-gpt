@@ -38,6 +38,15 @@ def _aq(loc: str, **kwargs) -> dict[str, Any]:
     return weather.air_quality(_clean_location(loc))
 
 
+def _sun(loc: str, **kwargs) -> dict[str, Any]:
+    data = weather.current_weather(_clean_location(loc))
+    return {
+        "place": data["place"],
+        "sunrise": data.get("sunrise"),
+        "sunset": data.get("sunset"),
+    }
+
+
 TOOLS: list[dict] = [
     {
         "type": "function",
@@ -105,6 +114,18 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sunrise_sunset",
+            "description": "Get today's sunrise and sunset times for a place. Use for 'sunrise', 'sunset', 'sun time', 'dawn', 'dusk', 'what time does the sun rise'.",
+            "parameters": {
+                "type": "object",
+                "properties": {"location": {"type": "string", "description": "City or town name, e.g. 'Delhi'."}},
+                "required": ["location"],
+            },
+        },
+    },
 ]
 
 TOOL_IMPL: dict[str, Callable[..., dict]] = {
@@ -113,6 +134,7 @@ TOOL_IMPL: dict[str, Callable[..., dict]] = {
     "get_historical_trend": _hist,
     "get_weather_alerts": _alerts,
     "get_air_quality": _aq,
+    "get_sunrise_sunset": _sun,
 }
 
 

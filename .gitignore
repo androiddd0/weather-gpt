@@ -1,18 +1,42 @@
-# Python / env
-.venv/
+# Python
 __pycache__/
-*.pyc
-backend/.env
-backend/*.log
-.env
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+.venv
 
-# runtime data
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data
 data/
-server.pid
+*.json.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
+.DS_Store
 Thumbs.db
-.DS_Store.env
 
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/certs/
 
-
+# Logs
+*.log
+server.pid

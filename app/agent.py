@@ -19,14 +19,18 @@ SYSTEM_PROMPT = """You are WeatherGPT, a friendly meteorological assistant for I
 
 HOW TO ANSWER:
 1. Understand the user's intent and select the correct tool:
+   - "hello", "hi", "namaste", "hey", "good morning" -> respond conversationally WITHOUT tools. Introduce yourself briefly and suggest what you can help with.
    - "current / now / right now / today" -> get_current_weather
    - "forecast / next days / upcoming week / will it rain tomorrow" -> get_forecast
    - "history / trend / compared to last year / monsoon average / climate" -> get_historical_trend
    - "alert / warning / heavy rain / storm / danger / safe to travel" -> get_weather_alerts
    - "air quality / AQI / pollution / smog" -> get_air_quality
+   - "sunrise / sunset / sun time / dawn / dusk" -> get_sunrise_sunset
 2. Call exactly the tool(s) you need. Resolve any user location in the 'location' field.
 3. After receiving tool output, write a concise, conversational reply (4-8 sentences max, use bullet lists when useful). Use °C and km/h. Mention the place, the figure, and what it means practically for the user.
 4. If the user asks who you are or for help, answer conversationally without tools.
+5. For weather responses, always include: the current temperature, what it feels like, humidity, wind speed, and a practical tip (e.g. "carry an umbrella", "stay hydrated", "good day for outdoor work").
+6. For forecasts, mention sunrise/sunset times if relevant, UV index for outdoor activities.
 
 LANGUAGE: Always reply in the SAME language the user wrote in. This is critical. India has 22 languages — detect Devanagari (Hindi/Marathi), Tamil, Telugu, Kannada, Malayalam, Bengali, Gujarati, Punjabi, Odia scripts. Romanised Hindi (Hinglish like "aaj ka mausam kaisa hai dilli me") should get a Hinglish reply. If the user message is in English, reply in English.
 
@@ -86,6 +90,13 @@ def fallback_answer(message: str, lang: str) -> dict[str, Any]:
     loc = _extract_location(message)
     try:
         route = try_route_intent(message) or _rule_intent(low)
+        # Handle greetings without tools
+        if not route and re.search(r"\b(hello|hi|hey|namaste|namaskar|good morning|good evening|good afternoon)\b", low):
+            greetings = {
+                "en": "Hello! I'm WeatherGPT, your weather assistant for India. I can help you with:\n\n- Current weather conditions\n- Multi-day forecasts\n- Historical climate trends\n- Extreme weather alerts\n- Air quality (AQI)\n- Sunrise & sunset times\n\nJust ask me about any city — try \"What's the weather in Delhi?\" or \"Forecast for Mumbai this week\".",
+                "hi": "नमस्ते! मैं WeatherGPT हूँ, भारत के लिए आपका मौसम सहायक। मैं इनमें मदद कर सकता हूँ:\n\n- मौसम की जानकारी\n- आने वाले दिनों का पूर्वानुमान\n- ऐतिहासिक मौसम डेटा\n- चेतावनी और अलर्ट\n- वायु गुणवत्ता (AQI)\n- सूर्योदय और सूर्यास्त का समय\n\nबस किसी भी शहर के बारे में पूछें — \"दिल्ली में मौसम कैसा है?\" या \"मुंबई का पूर्वानुमान\" आज़माएं।",
+            }
+            return {"answer": greetings.get(lang, greetings["en"]), "language": lang, "tools": [], "status": "ok", "offline": True}
         data = TOOL_IMPL[route](loc) if route else weather.current_weather(loc)
     except weather.WeatherError as e:
         return {"answer": str(e), "language": lang, "tools": [], "status": "ok", "offline": True}
@@ -96,6 +107,7 @@ def fallback_answer(message: str, lang: str) -> dict[str, Any]:
         "get_historical_trend": "get_historical_trend",
         "get_weather_alerts": "get_weather_alerts",
         "get_air_quality": "get_air_quality",
+        "get_sunrise_sunset": "get_sunrise_sunset",
     }.get(route, "get_current_weather")
 
     if route == "get_current_weather":
@@ -112,6 +124,8 @@ def fallback_answer(message: str, lang: str) -> dict[str, Any]:
                   f"rain {t.get('total_rain_mm')} mm over {t.get('rainy_days')} rainy days vs {p.get('total_rain_mm')} mm a year ago.")
     elif route == "get_weather_alerts":
         answer = f"Current conditions in {data.get('place')}: {data.get('condition')}, max today {data.get('today_high_c')}°C, rain {data.get('today_rain_mm')} mm, wind {data.get('today_wind_max_kmh')} km/h. No official IMD warning issued for this forecast."
+    elif route == "get_sunrise_sunset":
+        answer = f"Sun times for {data.get('place')}: sunrise {data.get('sunrise', 'N/A')}, sunset {data.get('sunset', 'N/A')}."
     else:
         answer = f"Air quality in {data.get('place')}: AQI {data.get('us_aqi')} ({data.get('category')}); PM2.5 {data.get('pm2_5')} µg/m³."
 
@@ -121,6 +135,10 @@ def fallback_answer(message: str, lang: str) -> dict[str, Any]:
 
 
 def _rule_intent(low: str) -> Optional[str]:
+    if re.search(r"\b(hello|hi|hey|namaste|namaskar|good morning|good evening|good afternoon)\b", low):
+        return None  # greeting — no tool needed
+    if re.search(r"sunrise|sunset|sun rise|sun set|sun time|dawn|dusk|सूर्योदय|सूर्यास्त", low):
+        return "get_sunrise_sunset"
     if re.search(r"forecast|next \d|tomorrow|kal|week|couple of days|5 day|7 day", low):
         return "get_forecast"
     if re.search(r"history|historical|trend|compared|last year|monsoon|average|pichhla|इतिहास|औसत", low):

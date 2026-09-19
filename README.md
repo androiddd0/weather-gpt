@@ -1,122 +1,139 @@
-# 🌦️ WeatherGPT — Conversational Weather & Local Alert Assistant
+# WeatherGPT
 
-An AI-powered, multilingual weather chatbot for India. Understands natural-language queries, **picks the right data source via LLM tool-calling**, answers in the user's own language, and runs a **scheduled extreme-weather alert engine** that pushes warnings live to the web UI and (optionally) Telegram.
+Conversational Weather & Local Alert Assistant for India.
 
-Built for a 5–6 hour hackathon window. Live data from **Open-Meteo** (current / forecast / historical archive / air quality / geocoding — all free, no API key).
+AI-powered chatbot that integrates meteorological data, forecasting models, and alert systems to deliver accurate, contextual, multilingual weather intelligence through natural conversation.
 
----
+## Features
 
-## ✨ Features vs. the problem statement
+- **Natural language weather queries** — ask in English, Hindi, or 11 Indian languages
+- **Real-time weather** — temperature, humidity, wind, conditions for any Indian city
+- **Multi-day forecasts** — up to 16 days with rain probability, UV index
+- **Historical trends** — climate comparison vs same period last year
+- **Extreme weather alerts** — IMD-inspired severity rules with live push notifications
+- **Air quality (AQI)** — PM2.5, PM10, ozone, NO2 data
+- **Sunrise/sunset times** — daily sun data for any location
+- **Voice input** — hands-free queries via Web Speech API
+- **Dark/light theme** — toggle based on preference, persists across sessions
+- **Multilingual** — Hindi, Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Punjabi, Odia
+- **Saved locations** — manage favourite cities, get alerts for each
+- **WebSocket live alerts** — real-time push when extreme weather is detected
+- **Telegram notifications** — optional Bot API integration
 
-| Problem-statement requirement | Implementation |
-|---|---|
-| Real-time weather retrieval | Open-Meteo current conditions (temp, feels-like, humidity, wind, pressure) |
-| NL querying for forecasts | Chat agent; multi-day forecasts with rain %, wind, UV, sunrise/sunset |
-| Tool-selection logic (current vs forecast vs history) | `gpt-oss-120b` function-calling over **5 distinct tools**; deterministic router as fallback. The UI shows which tool was used ✔ |
-| Extreme weather alerts + proactive warning | APScheduler scans saved locations every 15 min against **IMD-style thresholds** (heavy rain ≥10 mm/h or ≥64.5 mm/day, heatwave ≥40 °C, gale ≥62 km/h) |
-| Location-based forecasting & advisory | Every answer includes practical advice (farmer / commuter use cases) |
-| Multilingual (Indian languages) | Auto-detects 10 scripts (Hindi, Tamil, Telugu, Bengali, Marathi, Kannada, Malayalam, Gujarati, Punjabi, Odia) + Hinglish; replies in the same language |
-| Climate trend / historical analysis | Archive API compares recent 30 days vs same period a year earlier |
-| Voice-enabled interaction | Web Speech API: 🎤 mic input + spoken answers in `hi-IN`/regional voices (Chrome/Edge) |
+## Tech Stack
 
----
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.11+, FastAPI, Uvicorn |
+| LLM Agent | OpenAI SDK (Groq / any compatible API) with function calling |
+| Weather Data | Open-Meteo (free, no API key) |
+| Frontend | React 18, Vite, TypeScript, Tailwind CSS |
+| Charts | Chart.js via react-chartjs-2 |
+| Notifications | WebSocket + optional Telegram Bot API |
 
-## 🏗️ Architecture
+## Quick Start
 
-```
-frontend/index.html (chat UI + WS client)
-        │  POST /api/chat                │ WS /ws (alerts)
-        ▼                                ▼
-  ┌───────────────────────────────────────────────┐
-  │ FastAPI (backend/app/main.py)                  │
-  │  agent.py  → LLM tool-calling loop (gpt-oss)   │
-  │              └─ fallback: rule router (tools)  │
-  │  tools.py    5 tool schemas + implementations  │
-  │  weather.py  Open-Meteo client (all products)  │
-  │  language.py script/language detection + hints │
-  │  alerts.py   APScheduler scan + severity rules │
-  │  notifier.py Telegram bot push (optional)      │
-  │  store.py    JSON persistence (→ swap: Postgres)│
-  └───────────────┬───────────┬────────────────────┘
-                  │           │
-              Telegram     WebSocket push to UI
-```
-
-## 🚀 Quick start
+### 1. Backend
 
 ```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate          # or: source .venv/bin/activate
+# Install Python dependencies
 pip install -r requirements.txt
-copy .env.example .env          # then edit .env
-.venv\Scripts\uvicorn app.main:app --port 8000
+
+# Configure environment
+cp .env.example .env
+# Edit .env and add your LLM_API_KEY (get one free from https://console.groq.com/keys)
+
+# Run the server
+python -m app.main
+# Server starts at http://localhost:8000
 ```
 
-Open **http://localhost:8000**
+### 2. Frontend
 
-Windows shortcut: `python start.py` (or double-click `start.bat`).
+```bash
+cd frontend
 
-### `.env`
-```ini
-# LLM for query-understanding + tool selection (OpenAI-compatible)
-LLM_API_KEY=             # free key from https://console.groq.com  (model: openai/gpt-oss-120b)
-LLM_BASE_URL=https://api.groq.com/openai/v1
-LLM_MODEL=openai/gpt-oss-120b
+# Install Node dependencies
+npm install
 
-# Optional Telegram push — via @BotFather, then message your bot once and use that chat id
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+# Development mode (hot reload, proxies to backend)
+npm run dev
+# Frontend at http://localhost:5173
 
-ALERT_INTERVAL_MIN=15
+# Production build (served by FastAPI)
+npm run build
 ```
 
-> **No LLM key?** The app still works — it falls back to a deterministic intent router (~300 ms) with the same tool layer. Set `LLM_API_KEY` to unlock full conversational replies + language generation.
+### 3. Production
 
-## 🎬 5-minute demo script
+```bash
+# Build frontend
+cd frontend && npm run build && cd ..
 
-1. **Tool selection** — ask "5 day forecast for Mumbai" → shows `forecast` chip. Then "heavy rain warning for Kolkata" → `alert check`. Then "is it hotter than last year in Pune" → `climate trend`.
-2. **Multilingual** — pick हिन्दी (or type "दिल्ली का मौसम कैसा है"); answer comes back in Hindi. Try தமிழ் / తెలుగు / বাংলা.
-3. **Voice** — tap 🎤 and speak "aaj ka mausam kaisa hai mumbai"; it types, answers, and speaks back (Chrome/Edge).
-4. **Alerts** — click 🚨 *Simulate alert* → a red "Very Heavy Rainfall" warning pops into the chat + bell badge, over the live WebSocket. 
-5. **Saved locations** — add Chennai in the sidebar → the 15-min scheduler will start watching it; bell shows matching alerts.
-
-## 🔌 API summary
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/chat` | `{message, language, client_id, history}` → `{answer, language, tools[], elapsed_ms}` |
-| GET/POST/DELETE | `/api/locations` | saved-location watchlist per client |
-| GET | `/api/alerts` | alert feed for a client |
-| POST | `/api/alerts/scan` | run alert engine now |
-| POST | `/api/alerts/test` | simulate a warning (live-push demo) |
-| WS | `/ws?client_id=…` | live alert push |
-| GET | `/api/languages`, `/api/health` | meta |
-
-## 📁 Structure
-
-```
-backend/app/     FastAPI + agent + tools + weather + alerts + store
-backend/start.py portable launcher
-frontend/        index.html (self-contained chat app)
-data/            JSON persistence (created at runtime)
+# Run backend (serves built frontend from frontend/dist/)
+python -m app.main
+# Visit http://localhost:8000
 ```
 
-## 🧠 How it decides the right tool
+## API Endpoints
 
-The agent's system prompt maps intents → tools and calls them with the resolved `location`:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/chat` | Send a message to the weather agent |
+| `GET` | `/api/weather/summary` | Structured weather data for charting |
+| `GET` | `/api/locations` | List saved locations |
+| `POST` | `/api/locations` | Save a new location |
+| `DELETE` | `/api/locations/{id}` | Remove a saved location |
+| `GET` | `/api/alerts` | List active alerts |
+| `GET` | `/api/alerts/history` | Alert history with timestamps |
+| `POST` | `/api/alerts/scan` | Manually trigger alert scan |
+| `POST` | `/api/alerts/test` | Push a demo alert |
+| `GET` | `/api/languages` | List supported languages |
+| `GET` | `/api/health` | Health check |
+| `WS` | `/ws` | WebSocket for live alert push |
 
-- "now / right now / today" → `get_current_weather`
-- "forecast / next week / will it rain" → `get_forecast`
-- "trend / history / vs last year / monsoon" → `get_historical_trend`
-- "warning / heavy rain / safe to travel" → `get_weather_alerts`
-- "air quality / AQI / pollution" → `get_air_quality`
+## Configuration
 
-City names work in Indian scripts too (`दिल्ली`, `சென்னை`, `ಕೋಲ್ಕತ್ತಾ`…) via an alias + geocoding layer.
+Environment variables (`.env`):
 
-## ⚠️ Evaluation notes (for the judges)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_API_KEY` | — | API key for Groq or OpenAI-compatible endpoint |
+| `LLM_BASE_URL` | `https://api.groq.com/openai/v1` | LLM API base URL |
+| `LLM_MODEL` | `openai/gpt-oss-120b` | Model name |
+| `TELEGRAM_BOT_TOKEN` | — | Optional Telegram bot token |
+| `TELEGRAM_CHAT_ID` | — | Optional Telegram chat ID |
+| `ALERT_INTERVAL_MIN` | `15` | Alert scan interval in minutes |
+| `ALERT_MIN_SEVERITY` | `watch` | Minimum severity to trigger notifications |
 
-- **Accuracy** — data is live from Open-Meteo; nothing is hard-coded.
-- **Latency** — offline router ~300 ms; Groq gpt-oss-120b ~400–900 ms, both far under real-time limits.
-- **Working alerts** — scheduler is wired; use 🚨 to prove the live push + Telegram.
-- **Multilingual** — visible in the chat + selectable language menu + voice.
+## Architecture
+
+```
+weather-gpt/
+├── app/                    # Python backend
+│   ├── main.py            # FastAPI app + routes
+│   ├── agent.py           # LLM agent with tool calling
+│   ├── tools.py           # Tool definitions + implementations
+│   ├── weather.py         # Open-Meteo API integration
+│   ├── alerts.py          # Alert engine + scheduler
+│   ├── language.py        # Multilingual support
+│   ├── store.py           # JSON persistence
+│   ├── notifier.py        # Telegram integration
+│   ├── config.py          # Settings from env
+│   └── ws.py              # WebSocket manager
+├── frontend/              # React + Vite frontend
+│   ├── src/
+│   │   ├── App.tsx        # Main app component
+│   │   ├── api.ts         # Backend API client
+│   │   ├── types.ts       # TypeScript interfaces
+│   │   ├── hooks/         # Custom React hooks
+│   │   └── components/    # UI components
+│   └── package.json
+├── .env.example
+├── requirements.txt
+└── pyproject.toml
+```
+
+## License
+
+MIT
