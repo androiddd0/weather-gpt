@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 backend/.env
 backend/*.log
+.env
 
 # runtime data
 data/
@@ -11,4 +12,7 @@ server.pid
 
 # OS
 Thumbs.db
-.DS_Store
+.DS_Store.env
+
+
+
