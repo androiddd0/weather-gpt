@@ -1,0 +1,14 @@
+# Python / env
+.venv/
+__pycache__/
+*.pyc
+backend/.env
+backend/*.log
+
+# runtime data
+data/
+server.pid
+
+# OS
+Thumbs.db
+.DS_Store
