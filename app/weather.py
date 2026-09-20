@@ -1,7 +1,9 @@
 """Open-Meteo weather provider: current conditions, forecast, history, air quality, geocoding."""
 from __future__ import annotations
 
+import json
 import re
+import threading
 import time
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
@@ -102,7 +104,7 @@ def wmo_emoji(code: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# HTTP helper (with in-memory caching + rate-limit retries)
+# HTTP helper (persistent cache + rate-limit retries + stale-while-revalidate)
 # ---------------------------------------------------------------------------
 class WeatherError(Exception):
     pass
@@ -110,21 +112,59 @@ class WeatherError(Exception):
 
 _client = httpx.Client(timeout=settings.HTTP_TIMEOUT)
 
-# Short-TTL cache so chat + the alert scheduler don't hammer the free APIs
-# (Open-Meteo's free tier returns HTTP 429 when a shared Render IP is busy).
-_CACHE_TTL = 300  # seconds
+# Open-Meteo free tier rate-limits the shared Render outbound IP with 429s.
+# Strategy: short-lived live cache, plus a *persistent* on-disk copy that
+# survives instance restarts/sleeps, plus stale-while-revalidate so a 429
+# never shows an error to the user when we already have recent data.
+_CACHE_TTL = 900          # serve fresh results for 15 minutes
+_CACHE_MAX_AGE = 6 * 3600 # keep an on-disk copy up to 6 hours old
 _cache: dict = {}
+_cache_lock = threading.RLock()
+_CACHE_FILE = settings.DATA_FILE.parent / "weather_api_cache.json"
 
 
-def _cache_key(url: str, params: dict):
-    return (url, tuple(sorted(params.items())))
+def _cache_key(url: str, params: dict) -> str:
+    return json.dumps([url, sorted(params.items())], sort_keys=True)
+
+
+def _load_weather_cache() -> None:
+    now = time.time()
+    try:
+        raw = json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
+        for key, pair in raw.items():
+            if isinstance(pair, list) and len(pair) == 2 and now - pair[0] < _CACHE_MAX_AGE:
+                _cache[key] = [pair[0], pair[1]]
+    except Exception:
+        pass  # no cache yet / corrupt -> start empty
+
+
+_load_weather_cache()
+
+
+def _save_weather_cache() -> None:
+    now = time.time()
+    try:
+        with _cache_lock:
+            payload = {k: v for k, v in _cache.items() if now - v[0] < _CACHE_MAX_AGE}
+        _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _CACHE_FILE.with_suffix(".tmpjson")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(_CACHE_FILE)
+    except Exception:
+        pass  # disk write failure must never break a weather reply
+
+
+def _stale(key: str) -> Optional[dict]:
+    with _cache_lock:
+        pair = _cache.get(key)
+        return pair[1] if pair and time.time() - pair[0] < _CACHE_MAX_AGE else None
 
 
 def _get_json(url: str, params: dict, ttl: int = _CACHE_TTL) -> dict:
     key = _cache_key(url, params)
-    now = time.monotonic()
-
-    hit = _cache.get(key)
+    now = time.time()
+    with _cache_lock:
+        hit = _cache.get(key)
     if hit and now - hit[0] < ttl:
         return hit[1]
 
@@ -138,16 +178,29 @@ def _get_json(url: str, params: dict, ttl: int = _CACHE_TTL) -> dict:
             resp.raise_for_status()
             data = resp.json()
         except httpx.HTTPStatusError as e:
+            stale = _stale(key)
+            if stale is not None:
+                return stale
+            if e.response.status_code == 429 and attempt < 2:
+                continue
             if e.response.status_code == 429:
                 raise WeatherError("Weather data service is busy (rate limited). Try again in a minute.") from e
             raise WeatherError(f"Weather API error {e.response.status_code} for {url}") from e
         except Exception as e:  # network / json decode
+            stale = _stale(key)
+            if stale is not None:
+                return stale
             raise WeatherError(f"Failed to reach weather service: {e}") from e
 
         if isinstance(data, dict):
-            _cache[key] = (time.monotonic(), data)
+            with _cache_lock:
+                _cache[key] = [time.time(), data]
+            _save_weather_cache()
         return data
 
+    stale = _stale(key)
+    if stale is not None:
+        return stale
     raise WeatherError("Weather data service is busy. Try again shortly.")
 
 
