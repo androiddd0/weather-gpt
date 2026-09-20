@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
@@ -101,7 +102,7 @@ def wmo_emoji(code: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# HTTP helper
+# HTTP helper (with in-memory caching + rate-limit retries)
 # ---------------------------------------------------------------------------
 class WeatherError(Exception):
     pass
@@ -109,16 +110,45 @@ class WeatherError(Exception):
 
 _client = httpx.Client(timeout=settings.HTTP_TIMEOUT)
 
+# Short-TTL cache so chat + the alert scheduler don't hammer the free APIs
+# (Open-Meteo's free tier returns HTTP 429 when a shared Render IP is busy).
+_CACHE_TTL = 300  # seconds
+_cache: dict = {}
 
-def _get_json(url: str, params: dict) -> dict:
-    try:
-        resp = _client.get(url, params=params)
-        resp.raise_for_status()
-        return resp.json()
-    except httpx.HTTPStatusError as e:
-        raise WeatherError(f"Weather API error {e.response.status_code} for {url}") from e
-    except Exception as e:  # network / json decode
-        raise WeatherError(f"Failed to reach weather service: {e}") from e
+
+def _cache_key(url: str, params: dict):
+    return (url, tuple(sorted(params.items())))
+
+
+def _get_json(url: str, params: dict, ttl: int = _CACHE_TTL) -> dict:
+    key = _cache_key(url, params)
+    now = time.monotonic()
+
+    hit = _cache.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+
+    for attempt in range(3):
+        try:
+            resp = _client.get(url, params=params)
+            if resp.status_code == 429 and attempt < 2:
+                wait = 1 + attempt * 2  # 1s, 3s backoff
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                raise WeatherError("Weather data service is busy (rate limited). Try again in a minute.") from e
+            raise WeatherError(f"Weather API error {e.response.status_code} for {url}") from e
+        except Exception as e:  # network / json decode
+            raise WeatherError(f"Failed to reach weather service: {e}") from e
+
+        if isinstance(data, dict):
+            _cache[key] = (time.monotonic(), data)
+        return data
+
+    raise WeatherError("Weather data service is busy. Try again shortly.")
 
 
 # ---------------------------------------------------------------------------
