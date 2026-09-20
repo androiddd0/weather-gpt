@@ -163,7 +163,7 @@ def run_llm_agent(message: str, lang: str, history: list[dict]) -> dict[str, Any
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
     for h in history[-8:]:
         messages.append({"role": h["role"], "content": h["content"][:1200]})
-    messages.append({"role": "user", "content": message})
+    messages.append({"role": "user", "content": message + _lang_directive(detected)})
 
     try:
         for _ in range(3):
@@ -213,6 +213,15 @@ def _safe_args(raw: str) -> dict:
         return a if isinstance(a, dict) else {}
     except Exception:
         return {}
+
+
+def _lang_directive(lang: str) -> str:
+    """Explicit per-turn instruction so earlier conversation doesn't drag the language."""
+    if lang == "en":
+        return "\n\nReply ONLY in English. Do not switch to Hindi or Hinglish."
+    if lang == "hi":
+        return "\n\nइसी भाषा (हिंदी) में ही जवाब दें।"
+    return "\n\nReply in the same language as the message above."
 
 
 def _compact(d: dict) -> str:

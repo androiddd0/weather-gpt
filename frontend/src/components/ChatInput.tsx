@@ -3,15 +3,16 @@ import { useVoice } from '../hooks/useVoice'
 
 interface Props {
   onSend: (text: string) => void
+  language: string
   isLoading: boolean
 }
 
-export function ChatInput({ onSend, isLoading }: Props) {
+export function ChatInput({ onSend, language, isLoading }: Props) {
   const [text, setText] = useState('')
   const [showError, setShowError] = useState(true)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const { isListening, transcript, start, stop, supported, error } = useVoice((result) => {
+  const { isListening, transcript, start, stop, supported, error } = useVoice(language, (result) => {
     onSend(result)
     setText('')
   })

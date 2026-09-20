@@ -1,0 +1,12 @@
+# Render blueprint — deploy via dashboard: New > Blueprint > select repo.
+# Fill LLM_API_KEY when prompted (do NOT put the key in this file).
+services:
+  - type: web
+    name: weathergpt
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: LLM_API_KEY
+        sync: false

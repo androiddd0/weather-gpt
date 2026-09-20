@@ -40,7 +40,7 @@ AI-powered chatbot that integrates meteorological data, forecasting models, and 
 pip install -r requirements.txt
 
 # Configure environment
-cp .env.example .env
+copy .env.example .env
 # Edit .env and add your LLM_API_KEY (get one free from https://console.groq.com/keys)
 
 # Run the server

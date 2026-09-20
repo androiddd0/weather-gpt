@@ -159,6 +159,43 @@ def _geocode(name: str) -> dict[str, Any]:
             "country": r.get("country")}
 
 
+def search_places(query: str, count: int = 8) -> list[dict[str, Any]]:
+    """World-wide place autocomplete for the "add location" dropdown."""
+    if not query or not query.strip():
+        return []
+    q = " ".join(query.strip().split())
+    out: list[dict[str, Any]] = []
+
+    low = re.sub(r"\s+", " ", q.lower())
+    if low in CITY_ALIAS_INDEX:
+        entry = CITY_ALIASES[CITY_ALIAS_INDEX[low]]
+        loc = _geocode(entry["name"])
+        out.append(loc)
+
+    data = _get_json(f"{settings.GEOCODE_BASE}/search",
+                     {"name": q, "count": count, "language": "en", "format": "json"})
+    for r in data.get("results") or []:
+        if r.get("latitude") is None or r.get("longitude") is None:
+            continue
+        out.append({
+            "name": r.get("name", q),
+            "latitude": r.get("latitude"),
+            "longitude": r.get("longitude"),
+            "admin1": r.get("admin1"),
+            "country": r.get("country"),
+        })
+
+    seen: set[tuple] = set()
+    deduped: list[dict[str, Any]] = []
+    for r in out:
+        key = (r["name"], r.get("latitude"), r.get("longitude"), r.get("country"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(r)
+    return deduped[:count]
+
+
 # ---------------------------------------------------------------------------
 # Data products
 # ---------------------------------------------------------------------------

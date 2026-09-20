@@ -208,7 +208,7 @@ function App() {
           <ChatPanel messages={messages} isLoading={isLoading} />
         </div>
 
-        <ChatInput onSend={send} isLoading={isLoading} />
+        <ChatInput onSend={send} language={language} isLoading={isLoading} />
       </div>
     </div>
   )

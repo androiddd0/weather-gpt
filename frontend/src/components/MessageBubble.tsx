@@ -1,10 +1,17 @@
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { ChatMessage } from '../types'
 
 interface Props {
   content: string
   role: 'user' | 'assistant'
-  tools?: string[]
+  tools?: ChatMessage['tools']
   offline?: boolean
+}
+
+function toolName(t: NonNullable<ChatMessage['tools']>[number]): string {
+  const name = typeof t === 'string' ? t : t?.name ?? String(t ?? '')
+  return name.replace('get_', '')
 }
 
 export function MessageBubble({ content, role, tools, offline }: Props) {
@@ -19,8 +26,8 @@ export function MessageBubble({ content, role, tools, offline }: Props) {
           </div>
         ) : (
           <div className="glass rounded-2xl rounded-bl-md px-4 py-3 shadow-lg">
-            <div className="text-sm leading-relaxed text-white dark:text-white/90 prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0 prose-headings:my-2 prose-strong:text-white dark:prose-strong:text-white/95">
-              <ReactMarkdown>{content}</ReactMarkdown>
+            <div className="text-sm leading-relaxed text-white dark:text-white/90 prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-1 prose-headings:my-2.5 prose-table:my-3 prose-th:px-2.5 prose-th:py-1.5 prose-td:px-2.5 prose-td:py-1.5 prose-hr:my-3 prose-strong:text-white dark:prose-strong:text-white/95 prose-blockquote:text-white/80 overflow-x-auto">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
             </div>
             {(offline || (tools && tools.length > 0)) && (
               <div className="flex items-center gap-1.5 mt-2.5 pt-2.5 border-t border-white/15">
@@ -31,7 +38,7 @@ export function MessageBubble({ content, role, tools, offline }: Props) {
                 )}
                 {tools?.map((t, i) => (
                   <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/60 font-medium">
-                    {t.replace('get_', '')}
+                    {toolName(t)}
                   </span>
                 ))}
               </div>

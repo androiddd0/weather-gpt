@@ -18,32 +18,33 @@
   }
 
   /* ====== WEATHER GRADIENTS (the main event) ====== */
+  /* Light mode = soft, muted, low-contrast (eye-friendly) */
   .wx-clear {
-    background: linear-gradient(160deg, #2980b9 0%, #6dd5fa 40%, #ffffff 120%);
+    background: linear-gradient(160deg, #5f88a6 0%, #8fb0c8 45%, #ccd9e3 115%);
   }
   .wx-clear-night {
-    background: linear-gradient(160deg, #0f2027 0%, #203a43 40%, #2c5364 100%);
+    background: linear-gradient(160deg, #6f8096 0%, #93a4b8 45%, #c3ceda 110%);
   }
   .wx-partly-cloudy {
-    background: linear-gradient(160deg, #4b6cb7 0%, #8fa4bf 50%, #c8d6e5 120%);
+    background: linear-gradient(160deg, #728aa6 0%, #9fb2c6 50%, #d0d9e2 115%);
   }
   .wx-cloudy {
-    background: linear-gradient(160deg, #606c88 0%, #848fa3 50%, #b0bec5 120%);
+    background: linear-gradient(160deg, #8795a3 0%, #aab6c1 50%, #d5dce1 115%);
   }
   .wx-rain {
-    background: linear-gradient(160deg, #1a2a4a 0%, #3a5a7a 40%, #5a7a9a 100%);
+    background: linear-gradient(160deg, #52718c 0%, #7d94a9 45%, #b3bec9 110%);
   }
   .wx-heavy-rain {
-    background: linear-gradient(160deg, #0d1b2a 0%, #1b2838 40%, #2a3a4a 100%);
+    background: linear-gradient(160deg, #44607a 0%, #6d8499 45%, #9dacba 110%);
   }
   .wx-thunderstorm {
-    background: linear-gradient(160deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+    background: linear-gradient(160deg, #48566e 0%, #6d7d96 45%, #9eacbc 110%);
   }
   .wx-snow {
-    background: linear-gradient(160deg, #b8c6db 0%, #d4dde8 50%, #f5f7fa 120%);
+    background: linear-gradient(160deg, #8fa6bd 0%, #b3c3d4 50%, #e6ecf2 115%);
   }
   .wx-fog {
-    background: linear-gradient(160deg, #8e9eab 0%, #b0bec5 50%, #dce3ea 120%);
+    background: linear-gradient(160deg, #8d9dab 0%, #aebcc9 50%, #e0e6eb 115%);
   }
 
   .dark .wx-clear {
@@ -74,12 +75,12 @@
     background: linear-gradient(160deg, #0e1520 0%, #1a2530 50%, #253540 100%);
   }
 
-  /* ====== GLASS ====== */
+  /* ====== GLASS (light = muted, low glare) ====== */
   .glass {
-    background: rgba(255,255,255,0.18);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.14);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.16);
   }
   .dark .glass {
     background: rgba(255,255,255,0.08);
@@ -87,10 +88,10 @@
   }
 
   .glass-strong {
-    background: rgba(255,255,255,0.35);
-    backdrop-filter: blur(24px) saturate(200%);
-    -webkit-backdrop-filter: blur(24px) saturate(200%);
-    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.24);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.22);
   }
   .dark .glass-strong {
     background: rgba(255,255,255,0.12);
@@ -98,7 +99,7 @@
   }
 
   .glass-subtle {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.08);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
@@ -125,3 +126,10 @@
     to { opacity: 1; transform: translateY(0); }
   }
 }
+
+/* ====== SOFT LIGHT MODE (lower contrast, easier on the eyes) ====== */
+/* Unlayered so it wins over Tailwind utilities in light mode only */
+:root:not(.dark) .text-white { color: #eaf1f7; }
+:root:not(.dark) .bg-white/70 { background-color: rgba(255,255,255,0.55); }
+:root:not(.dark) .prose { --tw-prose-strong: 234 241 247; }
+:root:not(.dark) .prose strong { color: rgb(var(--tw-prose-strong)); }

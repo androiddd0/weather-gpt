@@ -31,29 +31,39 @@ _SCRIPT_MAP = [
     (re.compile(r"[\u0A00-\u0A7F]"), "pa"),    # Gurmukhi Punjabi
 ]
 
-# Romanised Hindi keywords: if the Latin-script message contains them, treat as Hinglish
+# Romanised Hindi keywords: if the Latin-script message contains them, treat as Hinglish.
+# Whole-word only, and only when the signal is strong enough — see detect_language.
 _ROMAN_HINDI_HINTS = (
     "mausam", "aaj", "kal", "kya", "hai", "nahi", "kaise", "kahan", "kaisa", "kaisi",
     "garmi", "sardi", "barish", "baarish", "barsaat", "bheeg", "taap", "chale", "kab",
-    "kitna", "kitni", "dilli", "mumbai", "aur", "toh", "bahut", "ho",
+    "kitna", "kitni", "aur", "toh", "bahut", "ho",
 )
+
+# Words that alone strongly indicate Hinglish (rare as English words).
+_STRONG_HINDI_HINTS = {
+    "mausam", "barish", "baarish", "barsaat", "garmi", "sardi", "kaise", "kaisa",
+    "kaisi", "kaise", "kitna", "kitni", "nahi", "bheeg", "bahut", "aaj", "kal",
+}
 
 
 def detect_language(text: str, preferred: str = "en") -> str:
-    """Detect the language of a user message. Falls back to the UI preference."""
+    """Detect the language of a user message. Falls back to the UI preference.
+
+    Uses whole-word matching so English words like "how", "hair", "thailand" or
+    "restaurant" don't accidentally trigger romanised-Hindi detection.
+    """
     if not text or not text.strip():
         return _norm(preferred)
     for regex, code in _SCRIPT_MAP:
         if regex.search(text):
-            if code == "hi" and "\u0921\u094B" in text and text.isascii() is False:
-                # Devanagari overwhelmingly maps to Hindi for weather chat
-                pass
             return code
     low = text.lower()
-    if re.search(r"[a-z]", low):
-        hints = sum(1 for w in _ROMAN_HINDI_HINTS if w in low)
-        if hints >= 1:
-            return "hi"
+    words = set(re.findall(r"[a-z][a-z']*", low))
+    if not words:
+        return _norm(preferred)
+    hits = {h for h in _ROMAN_HINDI_HINTS if h in words}
+    if hits & _STRONG_HINDI_HINTS or len(hits) >= 2:
+        return "hi"
     return _norm(preferred)
 
 

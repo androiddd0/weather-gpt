@@ -7,14 +7,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import alerts
+from . import alerts, stt
 from .agent import run_llm_agent
 from .config import settings
 from .language import LANGUAGES, language_hint_sentence
@@ -67,6 +67,33 @@ def chat(req: ChatRequest) -> dict[str, Any]:
     result["elapsed_ms"] = int((time.perf_counter() - t0) * 1000)
     result["hint"] = language_hint_sentence(result.get("language", "en"))
     return result
+
+
+# ------------------------------- speech-to-text -------------------------------
+@app.post("/api/stt")
+async def speech_to_text(file: UploadFile = File(...), language: str = Form("en")):
+    """Transcribe a microphone recording (server-side Whisper fallback for the Web Speech API)."""
+    data = await file.read()
+    try:
+        text = stt.transcribe(data, file.filename or "recording.webm", language)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        log.warning("STT failed: %s", e)
+        raise HTTPException(status_code=502, detail="Speech-to-text failed on the server.")
+    return {"text": text}
+
+
+# ------------------------------- place search (add-location dropdown) -------------------------------
+@app.get("/api/geocode")
+def geocode(q: str = Query(..., min_length=1, max_length=120), count: int = Query(8, ge=1, le=20)):
+    """World-wide place autocomplete used by the add-location search box."""
+    from . import weather as w
+    try:
+        results = w.search_places(q, count=count)
+    except WeatherError:
+        return {"results": []}
+    return {"results": results}
 
 
 # ------------------------------- saved locations -------------------------------

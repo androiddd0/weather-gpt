@@ -102,19 +102,25 @@ export interface SavedLocation {
   created: string
 }
 
+export interface ToolCallInfo {
+  name?: string
+  arguments?: unknown
+  status?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: number
-  tools?: string[]
+  tools?: Array<string | ToolCallInfo>
   offline?: boolean
 }
 
 export interface ChatResponse {
   answer: string
   language: string
-  tools: string[]
+  tools: Array<string | ToolCallInfo>
   status: string
   offline?: boolean
   elapsed_ms?: number
